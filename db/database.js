@@ -18,10 +18,13 @@ async function initializeDatabase() {
     try {
         await client.query(`
             CREATE TABLE IF NOT EXISTS users (
-                id SERIAL PRIMARY KEY,
-                username VARCHAR(50) UNIQUE NOT NULL,
+                user_id BIGINT PRIMARY KEY,
+                username VARCHAR(50),
                 telegram_id VARCHAR(100) UNIQUE,
+                phone_number VARCHAR(20),
                 password_hash VARCHAR(255),
+                balance NUMERIC(10, 2) DEFAULT 0.00,
+                is_registered BOOLEAN DEFAULT false,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 last_login TIMESTAMP,
                 is_active BOOLEAN DEFAULT true
@@ -29,7 +32,7 @@ async function initializeDatabase() {
 
             CREATE TABLE IF NOT EXISTS wallets (
                 id SERIAL PRIMARY KEY,
-                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                user_id BIGINT REFERENCES users(user_id) ON DELETE CASCADE,
                 balance DECIMAL(10, 2) DEFAULT 0.00,
                 currency VARCHAR(10) DEFAULT 'ETB',
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -38,7 +41,7 @@ async function initializeDatabase() {
 
             CREATE TABLE IF NOT EXISTS transactions (
                 id SERIAL PRIMARY KEY,
-                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                user_id BIGINT REFERENCES users(user_id) ON DELETE CASCADE,
                 type VARCHAR(20) NOT NULL,
                 amount DECIMAL(10, 2) NOT NULL,
                 balance_before DECIMAL(10, 2),
@@ -52,7 +55,7 @@ async function initializeDatabase() {
                 id SERIAL PRIMARY KEY,
                 stake_amount DECIMAL(10, 2) NOT NULL,
                 status VARCHAR(20) DEFAULT 'active',
-                winner_id INTEGER REFERENCES users(id),
+                winner_id BIGINT REFERENCES users(user_id),
                 winning_card INTEGER,
                 called_numbers INTEGER[],
                 total_pot DECIMAL(10, 2) DEFAULT 0.00,
@@ -63,7 +66,7 @@ async function initializeDatabase() {
             CREATE TABLE IF NOT EXISTS game_participants (
                 id SERIAL PRIMARY KEY,
                 game_id INTEGER REFERENCES games(id) ON DELETE CASCADE,
-                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                user_id BIGINT REFERENCES users(user_id) ON DELETE CASCADE,
                 card_id INTEGER NOT NULL,
                 stake_amount DECIMAL(10, 2) NOT NULL,
                 is_winner BOOLEAN DEFAULT false,

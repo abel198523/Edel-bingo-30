@@ -4,13 +4,25 @@ const http = require('http');
 const WebSocket = require('ws');
 const path = require('path');
 const jwt = require('jsonwebtoken');
+const cors = require('cors');
+const bodyParser = require('body-parser');
+const { Pool } = require('pg');
 
 const db = require('./db/database');
 const User = require('./models/User');
 const Wallet = require('./models/Wallet');
 const Game = require('./models/Game');
 
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+});
+
 const app = express();
+
+app.use(cors());
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
@@ -570,6 +582,102 @@ app.post('/api/auth/login', async (req, res) => {
         });
     } catch (err) {
         res.status(500).json({ error: 'Login failed' });
+    }
+});
+
+app.post('/api/register', async (req, res) => {
+    try {
+        const { userId, phoneNumber } = req.body;
+        
+        if (!userId || !phoneNumber) {
+            return res.status(400).json({ success: false, message: 'userId and phoneNumber are required' });
+        }
+
+        const existingUser = await pool.query(
+            'SELECT * FROM users WHERE user_id = $1',
+            [userId]
+        );
+
+        if (existingUser.rows.length > 0) {
+            return res.json({ success: false, message: 'User already registered.' });
+        }
+
+        await pool.query(
+            `INSERT INTO users (user_id, phone_number, is_registered, balance) 
+             VALUES ($1, $2, TRUE, 10)`,
+            [userId, phoneNumber]
+        );
+
+        res.json({ success: true, message: 'Registration successful. 10 ETB welcome bonus added.' });
+    } catch (err) {
+        console.error('Registration error:', err);
+        res.status(500).json({ success: false, message: 'Registration failed' });
+    }
+});
+
+app.get('/api/wallet/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        
+        const result = await pool.query(
+            'SELECT balance, is_registered FROM users WHERE user_id = $1',
+            [userId]
+        );
+
+        if (result.rows.length === 0) {
+            return res.json({ 
+                balance: 0, 
+                is_registered: false,
+                stake: 10
+            });
+        }
+
+        const user = result.rows[0];
+        res.json({ 
+            balance: parseFloat(user.balance) || 0, 
+            is_registered: user.is_registered || false,
+            stake: 10
+        });
+    } catch (err) {
+        console.error('Wallet error:', err);
+        res.status(500).json({ balance: 0, is_registered: false, stake: 10 });
+    }
+});
+
+app.post('/api/bet', async (req, res) => {
+    try {
+        const { userId, stakeAmount } = req.body;
+        
+        if (!userId || !stakeAmount) {
+            return res.status(400).json({ success: false, message: 'userId and stakeAmount are required' });
+        }
+
+        const userResult = await pool.query(
+            'SELECT balance FROM users WHERE user_id = $1',
+            [userId]
+        );
+
+        if (userResult.rows.length === 0) {
+            return res.json({ success: false, message: 'User not found' });
+        }
+
+        const currentBalance = parseFloat(userResult.rows[0].balance);
+        
+        if (currentBalance < stakeAmount) {
+            return res.json({ success: false, message: 'Insufficient balance' });
+        }
+
+        const newBalance = currentBalance - stakeAmount;
+        
+        await pool.query(
+            'UPDATE users SET balance = $1 WHERE user_id = $2',
+            [newBalance, userId]
+        );
+
+        res.json({ success: true, balance: newBalance });
+    } catch (err) {
+        console.error('Bet error:', err);
+        res.status(500).json({ success: false, message: 'Bet failed' });
     }
 });
 
