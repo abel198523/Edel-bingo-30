@@ -594,7 +594,7 @@ app.post('/api/register', async (req, res) => {
         }
 
         const existingUser = await pool.query(
-            'SELECT * FROM users WHERE user_id = $1',
+            'SELECT * FROM users WHERE telegram_id = $1',
             [userId]
         );
 
@@ -602,10 +602,19 @@ app.post('/api/register', async (req, res) => {
             return res.json({ success: false, message: 'User already registered.' });
         }
 
+        const username = 'Player_' + userId;
+        const userResult = await pool.query(
+            `INSERT INTO users (telegram_id, username, phone_number, is_registered) 
+             VALUES ($1, $2, $3, TRUE) RETURNING id`,
+            [userId, username, phoneNumber]
+        );
+
+        const newUserId = userResult.rows[0].id;
+        
         await pool.query(
-            `INSERT INTO users (user_id, phone_number, is_registered, balance) 
-             VALUES ($1, $2, TRUE, 10)`,
-            [userId, phoneNumber]
+            `INSERT INTO wallets (user_id, balance, currency) 
+             VALUES ($1, 10.00, 'ETB')`,
+            [newUserId]
         );
 
         res.json({ success: true, message: 'Registration successful. 10 ETB welcome bonus added.' });
@@ -620,7 +629,10 @@ app.get('/api/wallet/:userId', async (req, res) => {
         const { userId } = req.params;
         
         const result = await pool.query(
-            'SELECT balance, is_registered FROM users WHERE user_id = $1',
+            `SELECT u.id, u.is_registered, w.balance 
+             FROM users u 
+             LEFT JOIN wallets w ON u.id = w.user_id 
+             WHERE u.telegram_id = $1`,
             [userId]
         );
 
@@ -653,7 +665,10 @@ app.post('/api/bet', async (req, res) => {
         }
 
         const userResult = await pool.query(
-            'SELECT balance FROM users WHERE user_id = $1',
+            `SELECT u.id, w.balance 
+             FROM users u 
+             JOIN wallets w ON u.id = w.user_id 
+             WHERE u.telegram_id = $1`,
             [userId]
         );
 
@@ -661,6 +676,7 @@ app.post('/api/bet', async (req, res) => {
             return res.json({ success: false, message: 'User not found' });
         }
 
+        const internalUserId = userResult.rows[0].id;
         const currentBalance = parseFloat(userResult.rows[0].balance);
         
         if (currentBalance < stakeAmount) {
@@ -670,8 +686,8 @@ app.post('/api/bet', async (req, res) => {
         const newBalance = currentBalance - stakeAmount;
         
         await pool.query(
-            'UPDATE users SET balance = $1 WHERE user_id = $2',
-            [newBalance, userId]
+            'UPDATE wallets SET balance = $1, updated_at = CURRENT_TIMESTAMP WHERE user_id = $2',
+            [newBalance, internalUserId]
         );
 
         res.json({ success: true, balance: newBalance });
