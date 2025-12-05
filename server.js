@@ -1,14 +1,12 @@
 require('dotenv').config();
 const express = require('express');
-// ✅ ይህ መስመር ተስተካክሏል
-const http = require('http'); 
+const http = require('http'); // ✅ የተስተካከለ
 const WebSocket = require('ws'); 
 const path = require('path');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const { Pool } = require('pg');
-// የቴሌግራም ቦት ሞጁል ታክሏል
 const TelegramBot = require('node-telegram-bot-api'); 
 
 const db = require('./db/database');
@@ -27,24 +25,36 @@ const app = express();
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const RENDER_SERVER_URL = process.env.RENDER_SERVER_URL; 
 
-// If RENDER_SERVER_URL is set (production), use webhook mode, otherwise use polling (less ideal for Render)
+// **✅ ቦቱን ሁልጊዜ በፖሊንግ ይፍጠሩ እና ዌብሁክን በኋላ ያስተካክሉ**
 const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, {
-    webHook: RENDER_SERVER_URL ? { port: undefined } : false
+    // Render ላይ ሁልጊዜ ዌብሁክ ስለምንጠቀም, webHook: true እንዲሆን እናደርጋለን 
+    // ነገር ግን ቦቱ webHookን በራስ-ሰር እንዳይፈጥር polling: false እንላለን
+    polling: RENDER_SERVER_URL ? false : true 
 });
 
 if (RENDER_SERVER_URL) {
-    // Webhook URL: https://your-project-name.onrender.com/<YOUR_BOT_TOKEN>
     const webhookPath = '/' + TELEGRAM_BOT_TOKEN;
-    bot.setWebhook(RENDER_SERVER_URL + webhookPath).catch(console.error);
+    const webhookUrl = RENDER_SERVER_URL + webhookPath;
 
+    // 1. ዌብሁክን ያዘጋጃል (ይህ የቀደመውን ስህተት ይፈታል)
+    bot.setWebHook(webhookUrl).then(() => {
+        console.log(`Webhook successfully set to: ${webhookUrl}`);
+    }).catch(err => {
+        console.error("Error setting webhook:", err.message);
+    });
+
+    // 2. ቴሌግራም መልዕክቶችን ወደ ሰርቨሩ የሚልከው በዚህ መንገድ ነው
     app.post(webhookPath, (req, res) => {
+        if (!req.body) {
+            console.error("Received empty body on webhook.");
+            return res.sendStatus(400);
+        }
         bot.processUpdate(req.body);
         res.sendStatus(200);
     });
-    console.log(`Webhook set and listening on: ${RENDER_SERVER_URL}${webhookPath}`);
+    
 } else {
-    // For local testing (if you ever test locally)
-    bot.startPolling(); 
+    // ለሎካል ቴስቲንግ
     console.log("RENDER_SERVER_URL not set. Running bot in Polling mode.");
 }
 
@@ -62,6 +72,7 @@ bot.onText(/\/start/, (msg) => {
                     [{ 
                         text: "▶️ Play Chewatabingo", 
                         web_app: { 
+                            // ዌብ አፑ የሰርቨሩን አድራሻ በቀጥታ ይወስዳል
                             url: miniAppUrl 
                         } 
                     }]
