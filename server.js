@@ -1,7 +1,8 @@
 require('dotenv').config();
 const express = require('express');
-const http = require = require('http');
-const WebSocket = require('ws');
+// ✅ ይህ መስመር ተስተካክሏል
+const http = require('http'); 
+const WebSocket = require('ws'); 
 const path = require('path');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
@@ -32,7 +33,7 @@ const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, {
 });
 
 if (RENDER_SERVER_URL) {
-    // Webhook URL: https://edel-bingoo.onrender.com/7949510612:AAEs7YxIUPDuRF5rgCh9ju25DQeepLA5SuU
+    // Webhook URL: https://your-project-name.onrender.com/<YOUR_BOT_TOKEN>
     const webhookPath = '/' + TELEGRAM_BOT_TOKEN;
     bot.setWebhook(RENDER_SERVER_URL + webhookPath).catch(console.error);
 
