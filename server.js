@@ -1,12 +1,14 @@
 require('dotenv').config();
 const express = require('express');
-const http = require('http');
+const http = require = require('http');
 const WebSocket = require('ws');
 const path = require('path');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const { Pool } = require('pg');
+// የቴሌግራም ቦት ሞጁል ታክሏል
+const TelegramBot = require('node-telegram-bot-api'); 
 
 const db = require('./db/database');
 const User = require('./models/User');
@@ -19,6 +21,65 @@ const pool = new Pool({
 });
 
 const app = express();
+
+// --- Telegram Bot Logic Added ---
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const RENDER_SERVER_URL = process.env.RENDER_SERVER_URL; 
+
+// If RENDER_SERVER_URL is set (production), use webhook mode, otherwise use polling (less ideal for Render)
+const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, {
+    webHook: RENDER_SERVER_URL ? { port: undefined } : false
+});
+
+if (RENDER_SERVER_URL) {
+    // Webhook URL: https://edel-bingoo.onrender.com/7949510612:AAEs7YxIUPDuRF5rgCh9ju25DQeepLA5SuU
+    const webhookPath = '/' + TELEGRAM_BOT_TOKEN;
+    bot.setWebhook(RENDER_SERVER_URL + webhookPath).catch(console.error);
+
+    app.post(webhookPath, (req, res) => {
+        bot.processUpdate(req.body);
+        res.sendStatus(200);
+    });
+    console.log(`Webhook set and listening on: ${RENDER_SERVER_URL}${webhookPath}`);
+} else {
+    // For local testing (if you ever test locally)
+    bot.startPolling(); 
+    console.log("RENDER_SERVER_URL not set. Running bot in Polling mode.");
+}
+
+// Handle the /start command
+bot.onText(/\/start/, (msg) => {
+    const chatId = msg.chat.id;
+    
+    // RENDER_SERVER_URL is used for the Web App button's URL
+    const miniAppUrl = RENDER_SERVER_URL; 
+    
+    if (miniAppUrl) {
+        bot.sendMessage(chatId, "እንኳን ደህና መጡ! ጨዋታውን ለመጀመር 'Play' የሚለውን ቁልፍ ይጫኑ።", {
+            reply_markup: {
+                inline_keyboard: [
+                    [{ 
+                        text: "▶️ Play Chewatabingo", 
+                        web_app: { 
+                            url: miniAppUrl 
+                        } 
+                    }]
+                ]
+            }
+        });
+    } else {
+        bot.sendMessage(chatId, "የሰርቨሩ አድራሻ (RENDER_SERVER_URL) ስላልተቀናበረ ጨዋታውን መጀመር አልተቻለም።");
+    }
+});
+
+bot.on('polling_error', (error) => {
+    // This is useful for debugging in polling mode
+    if (!RENDER_SERVER_URL) {
+        console.error("Polling error:", error.code);
+    }
+});
+
+// --- End of Telegram Bot Logic ---
 
 app.use(cors());
 app.use(bodyParser.json());
@@ -715,6 +776,7 @@ async function startServer() {
     } catch (err) {
         console.error('Failed to start server:', err);
         
+        // Fallback to start server without database connection logic
         server.listen(PORT, '0.0.0.0', () => {
             console.log(`Server running on port ${PORT} (without database)`);
             console.log('WebSocket server ready');
