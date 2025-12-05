@@ -31,9 +31,9 @@ Real-time multiplayer Bingo game with wallet system, Telegram bot integration, a
 - `NODE_ENV` - Environment (production/development)
 
 ## API Endpoints
-- `POST /api/register` - Register user via phone number (Telegram)
-- `GET /api/wallet/:userId` - Get user wallet balance
-- `POST /api/bet` - Place a bet
+- `POST /api/register` - Register user via phone number (Telegram userId + phoneNumber)
+- `GET /api/wallet/:userId` - Get user wallet balance (by Telegram userId)
+- `POST /api/bet` - Place a bet (userId + stakeAmount)
 - `POST /api/auth/register` - Standard registration
 - `POST /api/auth/login` - Standard login
 
@@ -43,16 +43,17 @@ Real-time multiplayer Bingo game with wallet system, Telegram bot integration, a
 - Play button - Open WebApp for gameplay
 
 ## Database Schema
-- `users` - User accounts with Telegram ID, phone, balance
-- `wallets` - User wallet balances
+- `users` - User accounts (id SERIAL PK, telegram_id BIGINT UNIQUE, username, phone_number, is_registered)
+- `wallets` - User wallet balances (references users.id)
 - `transactions` - Transaction history
 - `games` - Game sessions
 - `game_participants` - Game participants
 
 ## Recent Changes
+- December 5, 2025: Fixed schema/model compatibility - restored serial id PK, added telegram_id BIGINT column
+- December 5, 2025: Updated API endpoints to use telegram_id for lookups and wallets table for balance
 - December 5, 2025: Added Telegram bot integration (bot.js)
-- December 5, 2025: Added /api/register and /api/wallet/:userId endpoints
-- December 5, 2025: Updated database schema for Telegram user_id (BIGINT)
+- December 5, 2025: Added /api/register, /api/wallet/:userId, /api/bet endpoints
 - December 5, 2025: Added game.js for Telegram WebApp integration
 
 ## Deployment
