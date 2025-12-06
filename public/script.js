@@ -1,10 +1,11 @@
 /**
  * Chewatabingo Frontend Script (script.js)
  * * ይህ ኮድ የቢንጎ ጨዋታውን የፊት ለፊት መቆጣጠሪያ (UI logic) እና ከ WebSocket ጋር ያለውን ግንኙነት ያከናውናል።
+ * * የ Render URL: wss://edel-bingoo.onrender.com
  */
 
 // =======================================================
-// 1. የሰርቨር ውቅረት (በእርስዎ Render URL የተስተካከለ)
+// 1. የሰርቨር ውቅረት
 // =======================================================
 // የ Render URLዎ በመሆኑ ምክንያት wss:// ፕሮቶኮልን እንጠቀማለን
 const WS_BASE_URL = 'wss://edel-bingoo.onrender.com'; 
@@ -16,7 +17,7 @@ let currentGameData = null;
 let selectedCardId = null;
 
 // =======================================================
-// 2. የ UI ክፍሎች መምረጥ
+// 2. የ UI ክፍሎች መምረጥ (DOM Elements)
 // =======================================================
 
 const landingScreen = document.getElementById('landing-screen');
@@ -28,6 +29,9 @@ const confirmCardBtn = document.getElementById('confirm-card-btn');
 const selectionFooter = document.querySelector('.selection-footer');
 const authModal = document.getElementById('auth-modal');
 const cardSelectionGrid = document.getElementById('card-selection-grid');
+
+const currentBalanceDisplay = document.getElementById('current-balance');
+const currentStakeDisplay = document.getElementById('current-stake');
 
 const connectionDot = document.getElementById('connection-dot');
 const connectionText = document.getElementById('connection-text');
@@ -67,6 +71,7 @@ function updateStakeSelection(stake) {
     });
     // በ Play ቁልፉ ላይ ያለውን መጠን ማዘመን
     btnStakeAmount.textContent = currentStake;
+    currentStakeDisplay.textContent = `${currentStake} ብር`;
 }
 
 function updateConnectionStatus(isConnected) {
@@ -86,10 +91,13 @@ function updateConnectionStatus(isConnected) {
 // =======================================================
 
 function connectWebSocket() {
+    // የቴሌግራም Mini App ውሂብ መኖሩን ማረጋገጥ
     const initData = window.Telegram?.WebApp?.initData;
     if (!initData) {
-        console.error("Telegram Mini App initData አልተገኘም! (ከቦት ውጪ ነው የተከፈተው?)");
+        console.error("Telegram Mini App initData አልተገኘም! ወደ መግቢያ ገጽ ተመለስ.");
         showScreen('landing');
+        // ለጊዜው Auth Modal ላይ ማሳየት
+        showScreen('auth'); 
         return; 
     }
     
@@ -101,6 +109,9 @@ function connectWebSocket() {
         updateConnectionStatus(true);
         // ግንኙነት ከተመሰረተ በኋላ የካርድ መምረጫ ገጽ ይከፈታል
         showScreen('selection');
+        // በዳታቤዝ ላይ የተቀመጠውን የካርድ ቁጥር ማጽዳት
+        selectedCardId = null;
+        confirmCardBtn.disabled = true;
     };
 
     socket.onmessage = (event) => {
@@ -109,8 +120,8 @@ function connectWebSocket() {
         
         if (message.type === 'WELCOME') {
             userData = message.user;
-            // ሒሳብን ማዘመን (እርስዎ በ HTML ውስጥ የሰጡትን ID ይጠቀማል)
-            document.getElementById('current-balance').textContent = `${(message.balance || 0).toFixed(2)} ብር`;
+            // ሒሳብን ማዘመን
+            currentBalanceDisplay.textContent = `${(message.balance || 0).toFixed(2)} ብር`;
 
         } else if (message.type === 'GAME_INFO') {
             currentGameData = message.game;
@@ -124,7 +135,7 @@ function connectWebSocket() {
             
         } else if (message.type === 'ERROR') {
             console.error("የሰርቨር ስህተት:", message.message);
-            // የ Toast መልዕክት ማሳየት (የቶስት ተግባር አልተጻፈም)
+            // የ Toast መልዕክት ማሳየት
         }
     };
 
@@ -145,88 +156,7 @@ function connectWebSocket() {
 // 5. የክስተት አድማጮች (Event Listeners)
 // =======================================================
 
-// ➡️ የመወራረጃ (Stake) ምርጫ
+// ➡️ የመወራረጃ (Stake) ምርጫ - ሁሉንም .stake-btn ይይዛል
 document.addEventListener('click', (e) => {
     if (e.target.classList.contains('stake-btn')) {
-        const stake = parseInt(e.target.dataset.stake);
-        updateStakeSelection(stake);
-    }
-});
-
-// ➡️ የመግቢያ 'Play' ቁልፍ
-landingPlayBtn.addEventListener('click', () => {
-    // ወደ ምርጫ ገጽ መሄድ እና WebSocket ግንኙነት መጀመር
-    showScreen('selection'); 
-    connectWebSocket(); 
-});
-
-// ➡️ ካርድ መርጦ የመጫወት ቁልፍ
-confirmCardBtn.addEventListener('click', () => {
-    if (socket && socket.readyState === WebSocket.OPEN && selectedCardId) {
-        const message = {
-            action: 'JOIN_GAME',
-            stake: currentStake,
-            card_id: selectedCardId // በ UI ላይ የተመረጠው ካርድ
-        };
-        socket.send(JSON.stringify(message));
-    } else {
-        console.error("ካርድ አልተመረጠም ወይም WebSocket አልተከፈተም.");
-        // ግንኙነት ለመፍጠር እንደገና መሞከር
-        if (!socket || socket.readyState !== WebSocket.OPEN) {
-            connectWebSocket();
-        }
-    }
-});
-
-// =======================================================
-// 6. የካርድ መምረጫ ገጽ መሙላት
-// =======================================================
-
-function populateCardSelectionGrid() {
-    // 100 ካርዶችን ለመምረጥ መፍጠር
-    for (let i = 1; i <= 100; i++) {
-        const cell = document.createElement('div');
-        cell.className = 'card-select-cell';
-        cell.textContent = i;
-        cell.dataset.cardId = i;
-        
-        cell.addEventListener('click', () => {
-            // የካርድ ምርጫ ሎጂክ
-            document.querySelectorAll('.card-select-cell').forEach(c => c.classList.remove('selected'));
-            cell.classList.add('selected');
-            selectedCardId = i; // የተመረጠውን ካርድ ID ማስቀመጥ
-            confirmCardBtn.disabled = false; // ካርድ ሲመረጥ Play ቁልፍን ማንቃት
-        });
-        
-        cardSelectionGrid.appendChild(cell);
-    }
-}
-
-// =======================================================
-// 7. የመጀመሪያ ገጽ ጭነት
-// =======================================================
-document.addEventListener('DOMContentLoaded', () => {
-    // የመወራረጃ ዋጋን በ10 ብር መጀመር
-    updateStakeSelection(10); 
-    
-    // የካርድ መምረጫ ግሪድን መሙላት
-    populateCardSelectionGrid();
-
-    // ቴሌግራም ዌብ አፕ መኖሩን ማረጋገጥ
-    if (window.Telegram?.WebApp) {
-        // ገጹ ለ Mini App ዝግጁ መሆኑን ማሳወቅ
-        window.Telegram.WebApp.ready();
-        
-        // የቴሌግራም Mini Appን ዳራ ቀለም እንዲጠቀም መፍቀድ
-        if (window.Telegram.WebApp.themeParams) {
-            document.body.style.backgroundColor = window.Telegram.WebApp.themeParams.bg_color;
-        }
-
-        // ገጹ ሲጫን ወደ ማረፊያ ገጽ መሄድ (Play ሲጫኑ ነው የሚገናኘው)
-        showScreen('landing');
-    } else {
-        // ከቴሌግራም ውጪ ከሆነ
-        console.warn("ከቴሌግራም Mini App ውጪ ተከፈተ.");
-        showScreen('landing');
-    }
-});
+        const stake = parseInt(e.target.dataset.
